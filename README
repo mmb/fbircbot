@@ -13,4 +13,4 @@ plugin.
 
 See: http://blog.jylin.com/2009/10/01/loading-wall-posts-using-facebookstream_get/
 
-Currently only a proof of concept, not a functioning rbot plugin yet.
+Automatic updating is turned off for now but works when run manually.
