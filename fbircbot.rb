@@ -21,7 +21,12 @@
 #
 # See: http://blog.jylin.com/2009/10/01/loading-wall-posts-using-facebookstream_get/
 #
-# Parameters must be hardcoded in @users but will soon be settable through the bot.
+# Example session:
+#
+# @facebook add mmb facebook_id_number api_key infinite_session_key infinite_session_secret
+# @facebook list
+# @facebook update
+#
 # Does not do any automatic updating until it's better tested. Must be
 # manually updated with "@facebook update".
 
