@@ -97,15 +97,45 @@ class FbIrcPlugin < Plugin
 
   def initialize
     super
-    @users = [{
-      :api_key => '',
-      :session_secret => '',
-      :session_key => '', # must be an infinite session
-      :user_id => '', # numeric id of the Facebook user whose stream to view
+    @users = @registry[:users] ||= {}
+  end
 
-      :nick => '', # nickname of the user whose Facebook news it is
-      :last_update => Time.at(0),
-      }]
+  def help(plugin, topic="")
+    case topic
+      when 'update' then
+        "facebook update => show updates to Facebook users' news feeds"
+      when 'add' then
+        'facebook add nick user_id api_key session_key session_secret => add a Facebook user'
+      when 'delete' then
+        'facebook delete nick => delete a Facebook user'
+      when 'list' then
+        'facebook list => list known Facebook users'
+      else
+        "show updates to Facebook users' news feeds: facebook update|add|delete|list"
+    end
+  end
+
+  def add(m, params)
+    @users[params[:nick]] = params.merge({ :last_update => Time.at(0) })
+    m.reply("added Facebook user #{params[:user_id]} as #{params[:nick]}")
+  end
+
+  def delete(m, params)
+    user = @users.delete(params[:nick])
+    if user
+      m.reply("deleted Facebook user #{user[:nick]}")
+    else
+      m.reply("Facebook user #{params[:nick]} not found")
+    end
+  end
+
+  def list(m, params)
+    m.reply("#{@users.size} known Facebook users")
+    @users.sort.each { |nick,u| m.reply "#{nick}: user_id = #{u[:user_id]}, api_key = #{u[:api_key]}, session_key = #{u[:session_key]}, session_secret = #{u[:session_secret]}, last_update #{u[:last_update]}" }
+  end
+
+  def save
+    @registry[:users] = @users
   end
 
   def poll_start
@@ -117,7 +147,7 @@ class FbIrcPlugin < Plugin
   end
 
   def update(m, params)
-    @users.each do |u|
+    @users.each_value do |u|
       url = FbIrcBot::FbRestUrl.new(u[:session_secret],
         'api_key' => u[:api_key],
         'format' => 'JSON',
@@ -154,3 +184,9 @@ plugin = FbIrcPlugin.new
 # plugin.map('facebook poll start', :action => 'poll_start')
 # plugin.map('facebook poll stop', :action => 'poll_stop')
 plugin.map('facebook update', :action => 'update')
+
+plugin.map(
+  'facebook add :nick :user_id :api_key :session_key :session_secret',
+  :action => 'add')
+plugin.map('facebook delete :nick', :action => 'delete')
+plugin.map('facebook list', :action => 'list')

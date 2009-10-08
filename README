@@ -8,8 +8,7 @@ from Facebook, Twitter, etc.
 Facebook API connection currently done through a Facebook app I have
 created in sandbox mode (only its developers can use it). My Facebook
 user has given this app "read_stream" and "offline_access" permissions. It
-requires an infinite session cookie be generated and hardcoded into the
-plugin.
+requires an infinite session cookie be generated and set in the plugin.
 
 See: http://blog.jylin.com/2009/10/01/loading-wall-posts-using-facebookstream_get/
 
