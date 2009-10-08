@@ -1,0 +1,2 @@
+* TODO use something like rails time_ago_in_words for dates
+* TODO add instructions and maybe rake tasks for getting api key, authorizing app, creating infinite session
