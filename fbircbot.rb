@@ -46,7 +46,10 @@ module FbIrcBot
     end
 
     def strip_html(s)
-      (s ? CGI::unescapeHTML(s.gsub(/\s*<\/?.*?>\s*/, ' ')).strip : '')
+      CGI::unescapeHTML(
+        s.gsub(/<\s*\/?(a|b).*?>/, '').
+        gsub(/<\s*\/?(br|div).*?>/, ' ').
+        gsub('&nbsp;', ' '))
     end
 
     attr_reader :who
@@ -59,7 +62,8 @@ module FbIrcBot
 
     def initialize(d)
       @who, @whenn = d['actor_id'], Time.at(d['created_time'])
-      @what = d['message'] + strip_html(d['attachment']['description'])
+      @what = "#{(d['message'] || '')} #{strip_html(d['attachment']['description'] || '')}".
+        gsub(/\s+/, ' ').strip
 
       @comments = d['comments']['comment_list'].to_a.collect { |c| Comment.new(c) }
       @updated = Time.at(d['updated_time'])
