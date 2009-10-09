@@ -115,8 +115,10 @@ class FbIrcPlugin < Plugin
         'facebook delete nick => delete a Facebook user'
       when 'list' then
         'facebook list => list known Facebook users'
+      when 'url' then
+        "facebook url nick => get a Facebook user's news stream url"
       else
-        "show updates to Facebook users' news feeds: facebook update|add|delete|list"
+        "show updates to Facebook users' news feeds: facebook update|add|delete|list|url"
     end
   end
 
@@ -127,11 +129,12 @@ class FbIrcPlugin < Plugin
 
   def delete(m, params)
     user = @users.delete(params[:nick])
-    if user
-      m.reply("deleted Facebook user #{user[:nick]}")
-    else
-      m.reply("Facebook user #{params[:nick]} not found")
-    end
+    m.reply(
+      if user
+        "deleted Facebook user #{user[:nick]}"
+      else
+        "Facebook user '#{params[:nick]}' not found"
+      end)
   end
 
   def list(m, params)
@@ -151,15 +154,28 @@ class FbIrcPlugin < Plugin
     @bot.timer.remove(@timer) unless @timer.nil?
   end
 
+  def make_url(u)
+    FbIrcBot::FbRestUrl.new(u[:session_secret],
+      'api_key' => u[:api_key],
+      'format' => 'JSON',
+      'method' => 'stream.get',
+      'session_key' => u[:session_key],
+      'viewer_id' => u[:user_id])
+  end
+
+  def url(m, params)
+    nick = params[:nick]
+    m.reply(
+      if @users.include?(nick)
+        "#{nick}: #{make_url(@users[nick])}"
+      else
+        "Facebook user '#{nick}' not found"
+      end)
+  end
+
   def update(m, params)
     @users.each_value do |u|
-      url = FbIrcBot::FbRestUrl.new(u[:session_secret],
-        'api_key' => u[:api_key],
-        'format' => 'JSON',
-        'method' => 'stream.get',
-        'session_key' => u[:session_key],
-        'viewer_id' => u[:user_id])
-      data = @bot.httputil.get(url, :cache => false)
+      data = @bot.httputil.get(make_url(u), :cache => false)
       # looked into sending if modified since header but seems to be ignored
       stream = JSON.parse(data)
       profiles = Hash[*stream['profiles'].collect { |x| [x['id'], x['name']] }.flatten]
@@ -195,3 +211,5 @@ plugin.map(
   :action => 'add')
 plugin.map('facebook delete :nick', :action => 'delete')
 plugin.map('facebook list', :action => 'list')
+
+plugin.map('facebook url :nick', :action => 'url')
