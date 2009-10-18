@@ -62,7 +62,7 @@ module FbIrcBot
 
     def initialize(d)
       @who, @whenn = d['actor_id'], Time.at(d['created_time'])
-      @what = "#{(d['message'] || '')} #{strip_html(d['attachment']['description'] || '')}".
+      @what = "#{d['message']} #{strip_html(d['attachment']['description'] || '')}".
         gsub(/\s+/, ' ').strip
 
       @app_id = d['app_id']
