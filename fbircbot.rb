@@ -62,10 +62,13 @@ module FbIrcBot
 
     def initialize(d)
       @who, @whenn = d['actor_id'], Time.at(d['created_time'])
-      @what = "#{d['message']} #{strip_html(d['attachment']['description'] || '')}".
+      @app_id = d['app_id']
+      attachment = d.fetch('attachment', {})
+      # Facebook Mobile photo urls
+      @photo_url = attachment['href'] if app_id == 1
+      @what = "#{d['message']} #{strip_html(attachment['description'] || '')} #{@photo_url}".
         gsub(/\s+/, ' ').strip
 
-      @app_id = d['app_id']
       @comments = d['comments']['comment_list'].to_a.collect { |c| Comment.new(c) }
       @updated = Time.at(d['updated_time'])
     end
