@@ -47,8 +47,8 @@ module FbIrcBot
 
     def strip_html(s)
       CGI::unescapeHTML(
-        s.gsub(/<\s*\/?(a|b).*?>/, '').
-        gsub(/<\s*\/?(br|div).*?>/, ' ').
+        s.gsub(/<\s*\/?(br|div).*?>/, ' ').
+        gsub(/<\s*\/?(a|b|small).*?>/, '').
         gsub('&nbsp;', ' '))
     end
 
