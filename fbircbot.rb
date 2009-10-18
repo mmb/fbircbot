@@ -65,10 +65,12 @@ module FbIrcBot
       @what = "#{(d['message'] || '')} #{strip_html(d['attachment']['description'] || '')}".
         gsub(/\s+/, ' ').strip
 
+      @app_id = d['app_id']
       @comments = d['comments']['comment_list'].to_a.collect { |c| Comment.new(c) }
       @updated = Time.at(d['updated_time'])
     end
 
+    attr_reader :app_id
     attr_reader :comments
     attr_reader :updated
   end
@@ -187,7 +189,8 @@ class FbIrcPlugin < Plugin
       stream['posts'].
         collect { |p| FbIrcBot::Post.new(p) }.
         select { |p| p.updated > u[:last_update] }.each do |post|
-        m.reply("#{u[:nick]} facebook: #{profiles[post.who]} (#{post.when_s}): #{post.what}")
+        app = post.app_id ? " (app #{post.app_id})" : ''
+        m.reply("#{u[:nick]} facebook: #{profiles[post.who]} (#{post.when_s})#{app}: #{post.what}")
         post.comments.each do |comment|
           m.reply("#{u[:nick]} facebook:   \\--> #{profiles[comment.who]} (#{comment.when_s}): #{comment.what}")
         end
