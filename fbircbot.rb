@@ -73,6 +73,14 @@ module FbIrcBot
       @updated = Time.at(d['updated_time'])
     end
 
+    APPS = {
+      10732101402 => 'Ping.fm',
+    }
+
+    def app
+      APPS.fetch(app_id) { |a| "app #{a}" if a }
+    end
+
     attr_reader :app_id
     attr_reader :comments
     attr_reader :updated
@@ -192,7 +200,7 @@ class FbIrcPlugin < Plugin
       stream['posts'].
         collect { |p| FbIrcBot::Post.new(p) }.
         select { |p| p.updated > u[:last_update] }.each do |post|
-        app = post.app_id ? " (app #{post.app_id})" : ''
+        app = post.app ? " (#{post.app})" : ''
         m.reply("#{u[:nick]} facebook: #{profiles[post.who]} (#{post.when_s})#{app}: #{post.what}")
         post.comments.each do |comment|
           m.reply("#{u[:nick]} facebook:   \\--> #{profiles[comment.who]} (#{comment.when_s}): #{comment.what}")
