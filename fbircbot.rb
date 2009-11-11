@@ -64,10 +64,15 @@ module FbIrcBot
       @who, @whenn = d['actor_id'], Time.at(d['created_time'])
       @app_id = d['app_id']
       attachment = d.fetch('attachment', {})
+
+      album = "#{attachment['name']} #{attachment['href']}" if attachment['fb_object_type'] == 'album'
+
+      description = strip_html(attachment['description']) if attachment['description']
+
       # Facebook Mobile photo urls
-      @photo_url = attachment['href'] if app_id == 1
-      @what = "#{d['message']} #{strip_html(attachment['description'] || '')} #{@photo_url}".
-        gsub(/\s+/, ' ').strip
+      photo_url = attachment['href'] if app_id == 1
+
+      @what = "#{d['message']} #{album} #{description} #{photo_url}".gsub(/\s+/, ' ').strip
 
       @comments = d['comments']['comment_list'].to_a.collect { |c| Comment.new(c) }
       @updated = Time.at(d['updated_time'])
