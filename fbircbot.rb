@@ -67,9 +67,7 @@ module FbIrcBot
 
       description = strip_html(attachment['description']) if attachment['description']
 
-      photo = "#{attachment['name']} #{attachment['href']}" if %w{album photo}.include?(attachment['fb_object_type'])
-
-      @what = "#{d['message']} #{description} #{photo}".gsub(/\s+/, ' ').strip
+      @what = "#{d['message']} #{attachment['name']} #{description} #{attachment['href']}".gsub(/\s+/, ' ').strip
 
       @comments = d['comments']['comment_list'].to_a.collect { |c| Comment.new(c) }
       @updated = Time.at(d['updated_time'])
