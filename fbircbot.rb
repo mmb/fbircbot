@@ -74,7 +74,9 @@ module FbIrcBot
     end
 
     APPS = {
+      2915120374 => 'Mobile Web',
       10732101402 => 'Ping.fm',
+      1394457661837 => 'Facebook Text Message',
     }
 
     def app
