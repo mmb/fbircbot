@@ -74,6 +74,7 @@ module FbIrcBot
       @updated = Time.at(d['updated_time'])
     end
 
+    # to look up app id http://www.facebook.com/apps/application.php?id=
     APPS = {
       2309869772 => 'Links',
       2915120374 => 'Mobile Web',
