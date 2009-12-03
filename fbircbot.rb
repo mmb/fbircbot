@@ -75,6 +75,7 @@ module FbIrcBot
     end
 
     APPS = {
+      2309869772 => 'Links',
       2915120374 => 'Mobile Web',
       6628568379 => 'Facebook for iPhone',
       10732101402 => 'Ping.fm',
