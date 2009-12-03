@@ -67,7 +67,8 @@ module FbIrcBot
 
       description = strip_html(attachment['description']) if attachment['description']
 
-      @what = "#{d['message']} #{attachment['name']} #{description} #{attachment['href']}".gsub(/\s+/, ' ').strip
+      attachment_href = FbIrcBot.strip_fb_tracking(attachment['href'])
+      @what = "#{d['message']} #{attachment['name']} #{description} #{attachment_href}".gsub(/\s+/, ' ').strip
 
       @comments = d['comments']['comment_list'].to_a.collect { |c| Comment.new(c) }
       @updated = Time.at(d['updated_time'])
@@ -75,6 +76,7 @@ module FbIrcBot
 
     APPS = {
       2915120374 => 'Mobile Web',
+      6628568379 => 'Facebook for iPhone',
       10732101402 => 'Ping.fm',
       1394457661837 => 'Facebook Text Message',
     }
@@ -113,6 +115,17 @@ module FbIrcBot
       "http://api.facebook.com/restserver.php?#{q}"
     end
 
+  end
+
+  module_function
+
+  # strip Facebook click tracking
+  def strip_fb_tracking(url)
+    begin
+      URI::decode(CGI::parse(URI(url).query)['u'].first)
+    rescue Exception
+      url
+    end
   end
 
 end
