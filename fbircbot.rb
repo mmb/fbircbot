@@ -76,6 +76,7 @@ module FbIrcBot
 
     # to look up app id http://www.facebook.com/apps/application.php?id=
     APPS = {
+      2254487659 => 'Facebook for BlackBerry',
       2309869772 => 'Links',
       2915120374 => 'Mobile Web',
       6628568379 => 'Facebook for iPhone',
