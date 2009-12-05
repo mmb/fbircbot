@@ -42,10 +42,10 @@ module FbIrcBot
   module Said
 
     def when_s
-      t.strftime(
-        if t.day == Time.now.day
+      whenn.strftime(
+        if whenn.day == Time.now.day
           '%I:%M%P'
-        elsif t.year == Time.now.year
+        elsif whenn.year == Time.now.year
           '%a %b %e %I:%M%P'
         else
           '%a %b %e %Y %I:%M%P'
