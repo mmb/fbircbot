@@ -44,11 +44,11 @@ module FbIrcBot
     def when_s
       whenn.strftime(
         if whenn.day == Time.now.day
-          '%I:%M%P'
+          '%l:%M%P'
         elsif whenn.year == Time.now.year
-          '%a %b %e %I:%M%P'
+          '%a %b %e %l:%M%P'
         else
-          '%a %b %e %Y %I:%M%P'
+          '%a %b %e %Y %l:%M%P'
         end).gsub(/\s+/, ' ')
     end
 
