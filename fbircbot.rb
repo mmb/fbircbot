@@ -49,7 +49,7 @@ module FbIrcBot
           '%a %b %e %l:%M%P'
         else
           '%a %b %e %Y %l:%M%P'
-        end).gsub(/\s+/, ' ')
+        end).strip.gsub(/\s+/, ' ')
     end
 
     def strip_html(s)
