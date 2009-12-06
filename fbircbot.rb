@@ -68,8 +68,9 @@ module FbIrcBot
     include Said
 
     def initialize(d)
-      @who, @whenn = d['actor_id'], Time.at(d['created_time'])
-      @app_id = d['app_id']
+      @app_id, @comment_count, @permalink, @post_id, @who, @whenn =
+        d['app_id'], d['comments']['count'].to_i, d['permalink'], d['post_id'],
+        d['actor_id'], Time.at(d['created_time'])
       attachment = d.fetch('attachment', {})
 
       description = strip_html(attachment['description']) if attachment['description']
@@ -77,7 +78,7 @@ module FbIrcBot
       attachment_href = FbIrcBot.strip_fb_tracking(attachment['href'])
       @what = "#{d['message']} #{attachment['name']} #{description} #{attachment_href}".gsub(/\s+/, ' ').strip
 
-      @comments = d['comments']['comment_list'].to_a.collect { |c| Comment.new(c) }
+      load_comments_from_parsed_json(d['comments']['comment_list'])
       @updated = Time.at(d['updated_time'])
     end
 
@@ -91,12 +92,22 @@ module FbIrcBot
       1394457661837 => 'Facebook Text Message',
     }
 
+    def all_comments_loaded?; comment_count == comments.size; end
+
     def app
       APPS.fetch(app_id) { |a| "app #{a}" if a }
     end
 
+    def load_comments_from_parsed_json(d, options={})
+      @comments = d.to_a.collect { |c| Comment.new(c) }
+      @comment_count = comments.size if options[:is_all]
+    end
+
     attr_reader :app_id
+    attr_reader :comment_count
     attr_reader :comments
+    attr_reader :permalink
+    attr_reader :post_id
     attr_reader :updated
   end
 
@@ -142,9 +153,12 @@ end
 
 class FbIrcPlugin < Plugin
 
+  MaxCommentsShown = 20
+
   def initialize
     super
     @users = @registry[:users] ||= {}
+    @profiles = {}
   end
 
   def help(plugin, topic="")
@@ -196,20 +210,41 @@ class FbIrcPlugin < Plugin
     @bot.timer.remove(@timer) unless @timer.nil?
   end
 
-  def make_url(u)
-    FbIrcBot::FbRestUrl.new(u[:session_secret],
+  def url_base(u)
+    {
       'api_key' => u[:api_key],
       'format' => 'JSON',
-      'method' => 'stream.get',
       'session_key' => u[:session_key],
-      'viewer_id' => u[:user_id])
+    }
+  end
+
+  def make_profile_url(u, uids, fields=%w{name})
+    FbIrcBot::FbRestUrl.new(u[:session_secret],
+      url_base(u).merge(
+      'method' => 'Users.getInfo',
+      'uids' => uids.to_a.join(','),
+      'fields' => fields.to_a.join(',')))
+  end
+
+  def make_posts_url(u)
+    FbIrcBot::FbRestUrl.new(u[:session_secret],
+      url_base(u).merge(
+      'method' => 'stream.get',
+      'viewer_id' => u[:user_id]))
+  end
+
+  def make_comments_url(u, post_id)
+    FbIrcBot::FbRestUrl.new(u[:session_secret],
+      url_base(u).merge(
+      'method' => 'stream.getComments',
+      'post_id' => post_id))
   end
 
   def url(m, params)
     nick = params[:nick]
     m.reply(
       if @users.include?(nick)
-        "#{nick}: #{make_url(@users[nick])}"
+        "#{nick}: #{make_posts_url(@users[nick])}"
       else
         "Facebook user '#{nick}' not found"
       end)
@@ -217,18 +252,47 @@ class FbIrcPlugin < Plugin
 
   def update(m, params)
     @users.each_value do |u|
-      data = @bot.httputil.get(make_url(u), :cache => false)
+      data = @bot.httputil.get(make_posts_url(u), :cache => false)
       # looked into sending if modified since header but seems to be ignored
       stream = JSON.parse(data)
-      profiles = Hash[*stream['profiles'].collect { |x| [x['id'], x['name']] }.flatten]
+
+      profiles.merge!(Hash[*stream['profiles'].
+        collect { |x| [x['id'], { :name => x['name'], :type => x['type'] }] }.
+        flatten])
 
       stream['posts'].
         collect { |p| FbIrcBot::Post.new(p) }.
         select { |p| p.updated > u[:last_update] }.each do |post|
         app = post.app ? " (#{post.app})" : ''
-        m.reply("#{u[:nick]} facebook: #{profiles[post.who]} (#{post.when_s})#{app}: #{post.what}")
-        post.comments.each do |comment|
-          m.reply("#{u[:nick]} facebook:   \\--> #{profiles[comment.who]} (#{comment.when_s}): #{comment.what}")
+        m.reply("#{u[:nick]} facebook: #{profiles[post.who][:name]} (#{post.when_s})#{app}: #{post.what}")
+        unless post.all_comments_loaded?
+          post.load_comments_from_parsed_json(JSON.parse(@bot.httputil.get(
+            make_comments_url(u, post.post_id), :cache => false)),
+            :is_all => true)
+        end
+        comments_shown = 0
+        post.comments.each_with_index do |comment, i|
+          if comments_shown >= MaxCommentsShown
+            m.reply("#{comments_shown} comments shown, see the rest at #{post.permalink}")
+            break
+          end
+          if comment.whenn > u[:last_update]
+            # look up profile name from user id unless already known
+            unless profiles.has_key?(comment.who)
+              profile_resp = begin
+                JSON.parse(@bot.httputil.get(make_profile_url(u, comment.who),
+                  :cache => false))
+              rescue Exception
+                [ { 'name' => comment.who, 'uid' => comment.who  } ]
+              end
+              profiles.merge!(Hash[*profile_resp.
+                collect { |x| [x['uid'], { :name => x['name'],
+                  :type => profiles.fetch(x['uid'], {})[:type] }] }.flatten])
+            end
+
+            m.reply("#{u[:nick]} facebook:   \\-(#{i + 1}/#{post.comment_count})-> #{profiles[comment.who][:name]} (#{comment.when_s}): #{comment.what}")
+            comments_shown += 1
+          end
         end
       end
       u[:last_update] = Time.now
@@ -241,6 +305,7 @@ class FbIrcPlugin < Plugin
     super
   end
 
+  attr_reader :profiles
 end
 
 plugin = FbIrcPlugin.new
