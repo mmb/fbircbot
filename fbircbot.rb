@@ -229,7 +229,9 @@ class FbIrcPlugin < Plugin
   def make_posts_url(u)
     FbIrcBot::FbRestUrl.new(u[:session_secret],
       url_base(u).merge(
+      'limit' => '100',
       'method' => 'stream.get',
+      'start_time' => u[:last_update].to_i.to_s,
       'viewer_id' => u[:user_id]))
   end
 
@@ -253,6 +255,7 @@ class FbIrcPlugin < Plugin
   def update(m, params)
     @users.each_value do |u|
       data = @bot.httputil.get(make_posts_url(u), :cache => false)
+      last_update = Time.now
       # looked into sending if modified since header but seems to be ignored
       stream = JSON.parse(data)
 
@@ -260,9 +263,7 @@ class FbIrcPlugin < Plugin
         collect { |x| [x['id'], { :name => x['name'], :type => x['type'] }] }.
         flatten])
 
-      stream['posts'].
-        collect { |p| FbIrcBot::Post.new(p) }.
-        select { |p| p.updated > u[:last_update] }.each do |post|
+      stream['posts'].collect { |p| FbIrcBot::Post.new(p) }.each do |post|
         app = post.app ? " (#{post.app})" : ''
         m.reply("#{u[:nick]} facebook: #{profiles[post.who][:name]} (#{post.when_s})#{app}: #{post.what}")
         unless post.all_comments_loaded?
@@ -276,7 +277,7 @@ class FbIrcPlugin < Plugin
             m.reply("#{comments_shown} comments shown, see the rest at #{post.permalink}")
             break
           end
-          if comment.whenn > u[:last_update]
+          if comment.whenn >= u[:last_update]
             # look up profile name from user id unless already known
             unless profiles.has_key?(comment.who)
               profile_resp = begin
@@ -295,7 +296,7 @@ class FbIrcPlugin < Plugin
           end
         end
       end
-      u[:last_update] = Time.now
+      u[:last_update] = last_update
     end
     true
   end
