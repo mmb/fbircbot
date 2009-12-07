@@ -271,29 +271,37 @@ class FbIrcPlugin < Plugin
             make_comments_url(u, post.post_id), :cache => false)),
             :is_all => true)
         end
-        comments_shown = 0
-        post.comments.each_with_index do |comment, i|
-          if comments_shown >= MaxCommentsShown
-            m.reply("#{comments_shown} comments shown, see the rest at #{post.permalink}")
-            break
-          end
-          if comment.whenn >= u[:last_update]
-            # look up profile name from user id unless already known
-            unless profiles.has_key?(comment.who)
-              profile_resp = begin
-                JSON.parse(@bot.httputil.get(make_profile_url(u, comment.who),
-                  :cache => false))
-              rescue Exception
-                [ { 'name' => comment.who, 'uid' => comment.who  } ]
-              end
-              profiles.merge!(Hash[*profile_resp.
-                collect { |x| [x['uid'], { :name => x['name'],
-                  :type => profiles.fetch(x['uid'], {})[:type] }] }.flatten])
-            end
 
-            m.reply("#{u[:nick]} facebook:   \\-(#{i + 1}/#{post.comment_count})-> #{profiles[comment.who][:name]} (#{comment.when_s}): #{comment.what}")
-            comments_shown += 1
+        comments_to_show = []
+        comment_indices = []
+        post.comments.each_with_index do |comment, i|
+          if comments_to_show.size >= MaxCommentsShown
+            m.reply("#{comments_to_show.size} comments will be shown, see the rest at #{post.permalink}")
+            break
+          elsif comment.whenn >= u[:last_update]
+            comments_to_show.push(comment)
+            comment_indices.push(i + 1)
           end
+        end
+
+        profiles_needed = comments_to_show.collect { |c| c.who }.
+          reject { |w| profiles.has_key?(w) }
+
+        unless profiles_needed.empty?
+          begin
+            profile_resp = JSON.parse(@bot.httputil.get(make_profile_url(
+              u, profiles_needed), :cache => false))
+            profiles.merge!(Hash[*profile_resp.
+              collect { |x| [x['uid'], { :name => x['name'],
+              :type => profiles.fetch(x['uid'], {})[:type] }] }.flatten])
+          rescue Exception
+          end
+        end
+
+        comments_to_show.each_with_index do |comment, i|
+          who = profiles.fetch(comment.who, { :name => comment.who })[:name]
+
+          m.reply("#{u[:nick]} facebook:   \\-(#{comment_indices[i]}/#{post.comment_count})-> #{who} (#{comment.when_s}): #{comment.what}")
         end
       end
       u[:last_update] = last_update
