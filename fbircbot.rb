@@ -138,6 +138,91 @@ module FbIrcBot
 
   end
 
+  class User
+
+    include Comparable
+
+    def initialize(d)
+      @api_key = d[:api_key]
+      @ignores = d[:ignores] || {}
+      @last_update = d[:last_update] || Time.at(0)
+      @nick = d[:nick]
+      @session_key = d[:session_key]
+      @session_secret = d[:session_secret]
+      @user_id = d[:user_id]
+    end
+
+    def posts_url
+      p = {
+        'limit' => '100',
+        'method' => 'stream.get',
+        'viewer_id' => user_id
+        }
+      p['start_time'] = last_update.to_i.to_s if last_update > Time.at(0)
+
+      FbIrcBot::FbRestUrl.new(session_secret, url_base.merge(p))
+    end
+
+    def comments_url(post_id)
+      FbIrcBot::FbRestUrl.new(session_secret,
+        url_base.merge(
+        'method' => 'stream.getComments',
+        'post_id' => post_id))
+    end
+
+    def profiles_url(uids, fields=%w{name})
+      FbIrcBot::FbRestUrl.new(session_secret,
+        url_base.merge(
+        'method' => 'Users.getInfo',
+        'uids' => uids.to_a.join(','),
+        'fields' => fields.to_a.join(',')))
+    end
+
+    def ignore(friend); @ignores[friend] = true; end
+
+    def unignore(friend); @ignores.delete(friend); end
+
+    def ignore_list; @ignores.keys; end
+
+    def ignoring?(friend)
+      @ignores.keys.collect { |f| f.downcase } .include?(friend.downcase)
+    end
+
+    def dump
+      {
+        :api_key => api_key,
+        :ignores => @ignores,
+        :last_update => last_update,
+        :nick => nick,
+        :session_key => session_key,
+        :session_secret => session_secret,
+        :user_id => user_id,
+      }
+    end
+
+    def inspect
+      "#{nick}: user_id = #{user_id}, api_key = #{api_key}, session_key = #{session_key}, session_secret = #{session_secret}, last_update #{last_update}"
+    end
+
+    def url_base
+      {
+        'api_key' => api_key,
+        'format' => 'JSON',
+        'session_key' => session_key,
+      }
+    end
+
+    def <=>(other); nick <=> other.nick; end
+
+    attr_accessor :last_update
+
+    attr_reader :api_key
+    attr_reader :nick
+    attr_reader :user_id
+    attr_reader :session_key
+    attr_reader :session_secret
+  end
+
   module_function
 
   # strip Facebook click tracking
@@ -157,7 +242,8 @@ class FbIrcPlugin < Plugin
 
   def initialize
     super
-    @users = @registry[:users] ||= {}
+    @users = {}
+    (@registry[:users] ||= {}).each { |k,v| @users[k] = FbIrcBot::User.new(v) }
     @profiles = {}
   end
 
@@ -171,35 +257,36 @@ class FbIrcPlugin < Plugin
         'facebook delete nick => delete a Facebook user'
       when 'list' then
         'facebook list => list known Facebook users'
+      when 'ignore' then
+        'facebook ignore (add nick friend|delete nick friend|list nick) => ignore updates from some friends for a Facebook user'
       when 'url' then
         "facebook url nick => get a Facebook user's news stream url"
       else
-        "show updates to Facebook users' news feeds: facebook update|add|delete|list|url"
+        "show updates to Facebook users' news feeds: facebook update|add|delete|ignore|list|url"
     end
   end
 
   def add(m, params)
-    @users[params[:nick]] = params.merge({ :last_update => Time.at(0) })
+    @users[params[:nick]] = FbIrcBot::User.new(params)
     m.reply("added Facebook user #{params[:user_id]} as #{params[:nick]}")
   end
 
   def delete(m, params)
-    user = @users.delete(params[:nick])
-    m.reply(
-      if user
-        "deleted Facebook user #{user[:nick]}"
-      else
-        "Facebook user '#{params[:nick]}' not found"
-      end)
+    if (user = get_user(m, params[:nick]))
+      @users.delete(user.nick)
+      m.reply("deleted Facebook user #{user.nick}")
+    end
   end
 
   def list(m, params)
     m.reply("#{@users.size} known Facebook users")
-    @users.sort.each { |nick,u| m.reply "#{nick}: user_id = #{u[:user_id]}, api_key = #{u[:api_key]}, session_key = #{u[:session_key]}, session_secret = #{u[:session_secret]}, last_update #{u[:last_update]}" }
+    @users.values.sort.each { |u| m.reply(u.inspect) }
   end
 
   def save
-    @registry[:users] = @users
+    dumped = {}
+    @users.each { |k,v| dumped[k] = v.dump  }
+    @registry[:users] = dumped
   end
 
   def poll_start
@@ -210,51 +297,46 @@ class FbIrcPlugin < Plugin
     @bot.timer.remove(@timer) unless @timer.nil?
   end
 
-  def url_base(u)
-    {
-      'api_key' => u[:api_key],
-      'format' => 'JSON',
-      'session_key' => u[:session_key],
-    }
-  end
-
-  def make_profile_url(u, uids, fields=%w{name})
-    FbIrcBot::FbRestUrl.new(u[:session_secret],
-      url_base(u).merge(
-      'method' => 'Users.getInfo',
-      'uids' => uids.to_a.join(','),
-      'fields' => fields.to_a.join(',')))
-  end
-
-  def make_posts_url(u)
-    FbIrcBot::FbRestUrl.new(u[:session_secret],
-      url_base(u).merge(
-      'limit' => '100',
-      'method' => 'stream.get',
-      'start_time' => u[:last_update].to_i.to_s,
-      'viewer_id' => u[:user_id]))
-  end
-
-  def make_comments_url(u, post_id)
-    FbIrcBot::FbRestUrl.new(u[:session_secret],
-      url_base(u).merge(
-      'method' => 'stream.getComments',
-      'post_id' => post_id))
+  def get_user(m, nick)
+    if @users.include?(nick)
+      @users[nick]
+    else
+      m.reply("Facebook user '#{nick}' not found")
+      nil
+    end
   end
 
   def url(m, params)
-    nick = params[:nick]
-    m.reply(
-      if @users.include?(nick)
-        "#{nick}: #{make_posts_url(@users[nick])}"
-      else
-        "Facebook user '#{nick}' not found"
-      end)
+    if (user = get_user(m, params[:nick]))
+      m.reply("#{user.nick}: #{user.posts_url}")
+    end
+  end
+
+  def ignore_add(m, params)
+    if (user = get_user(m, params[:nick]))
+      friend = params[:friend].join(' ')
+      user.ignore(friend)
+      m.reply("Ignored #{friend} for Facebook user #{user.nick}")
+    end
+  end
+
+  def ignore_delete(m, params)
+    if (user = get_user(m, params[:nick]))
+      friend = params[:friend].join(' ')
+      user.unignore(friend)
+      m.reply("Unignored #{friend} for Facebook user #{user.nick}")
+    end
+  end
+
+  def ignore_list(m, params)
+    if (user = get_user(m, params[:nick]))
+      m.reply("#{user.nick} is ignoring: #{user.ignore_list.join(', ')}")
+    end
   end
 
   def update(m, params)
     @users.each_value do |u|
-      data = @bot.httputil.get(make_posts_url(u), :cache => false)
+      data = @bot.httputil.get(u.posts_url, :cache => false)
       last_update = Time.now
       # looked into sending if modified since header but seems to be ignored
       stream = JSON.parse(data)
@@ -263,13 +345,14 @@ class FbIrcPlugin < Plugin
         collect { |x| [x['id'], { :name => x['name'], :type => x['type'] }] }.
         flatten])
 
-      stream['posts'].collect { |p| FbIrcBot::Post.new(p) }.each do |post|
+      stream['posts'].collect { |p| FbIrcBot::Post.new(p) }.
+        reject { |p| u.ignoring?(profiles[p.who][:name]) }.
+        each do |post|
         app = post.app ? " (#{post.app})" : ''
-        m.reply("#{u[:nick]} facebook: #{profiles[post.who][:name]} (#{post.when_s})#{app}: #{post.what}")
+        m.reply("#{u.nick} Facebook: #{profiles[post.who][:name]} (#{post.when_s})#{app}: #{post.what}")
         unless post.all_comments_loaded?
           post.load_comments_from_parsed_json(JSON.parse(@bot.httputil.get(
-            make_comments_url(u, post.post_id), :cache => false)),
-            :is_all => true)
+            u.comments_url(post.post_id), :cache => false)), :is_all => true)
         end
 
         comments_to_show = []
@@ -278,19 +361,19 @@ class FbIrcPlugin < Plugin
           if comments_to_show.size >= MaxCommentsShown
             m.reply("#{comments_to_show.size} comments will be shown, see the rest at #{post.permalink}")
             break
-          elsif comment.whenn >= u[:last_update]
+          elsif comment.whenn >= u.last_update
             comments_to_show.push(comment)
             comment_indices.push(i + 1)
           end
         end
 
         profiles_needed = comments_to_show.collect { |c| c.who }.
-          reject { |w| profiles.has_key?(w) }
+          reject { |w| profiles.key?(w) }
 
         unless profiles_needed.empty?
           begin
-            profile_resp = JSON.parse(@bot.httputil.get(make_profile_url(
-              u, profiles_needed), :cache => false))
+            profile_resp = JSON.parse(@bot.httputil.get(u.profiles_url(
+              profiles_needed), :cache => false))
             profiles.merge!(Hash[*profile_resp.
               collect { |x| [x['uid'], { :name => x['name'],
               :type => profiles.fetch(x['uid'], {})[:type] }] }.flatten])
@@ -301,10 +384,10 @@ class FbIrcPlugin < Plugin
         comments_to_show.each_with_index do |comment, i|
           who = profiles.fetch(comment.who, { :name => comment.who })[:name]
 
-          m.reply("#{u[:nick]} facebook:   \\-(#{comment_indices[i]}/#{post.comment_count})-> #{who} (#{comment.when_s}): #{comment.what}")
+          m.reply("#{u.nick} Facebook:   \\-(#{comment_indices[i]}/#{post.comment_count})-> #{who} (#{comment.when_s}): #{comment.what}")
         end
       end
-      u[:last_update] = last_update
+      u.last_update = last_update
     end
     true
   end
@@ -328,5 +411,9 @@ plugin.map(
   :action => 'add')
 plugin.map('facebook delete :nick', :action => 'delete')
 plugin.map('facebook list', :action => 'list')
+
+plugin.map('facebook ignore add :nick *friend', :action => 'ignore_add')
+plugin.map('facebook ignore delete :nick *friend', :action => 'ignore_delete')
+plugin.map('facebook ignore list :nick', :action => 'ignore_list')
 
 plugin.map('facebook url :nick', :action => 'url')
