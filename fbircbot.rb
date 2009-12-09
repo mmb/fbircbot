@@ -175,11 +175,11 @@ module FbIrcBot
         'fields' => fields.to_a.join(',')))
     end
 
-    def ignore(friend); @ignores[friend] = true; end
+    def ignore(friend); @ignores[friend.strip] = true; end
 
     def unignore(friend); @ignores.delete(friend); end
 
-    def ignore_list; @ignores.keys; end
+    def ignore_list; @ignores.keys.sort; end
 
     def ignoring?(friend)
       @ignores.keys.collect { |f| f.downcase } .include?(friend.downcase)
