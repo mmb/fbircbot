@@ -145,7 +145,7 @@ module FbIrcBot
     def initialize(d)
       @api_key = d[:api_key]
       @ignores = d[:ignores] || {}
-      @last_update = d[:last_update] || Time.at(0)
+      @last_update = d[:last_update] || Time.now - 86400
       @nick = d[:nick]
       @session_key = d[:session_key]
       @session_secret = d[:session_secret]
@@ -153,14 +153,11 @@ module FbIrcBot
     end
 
     def posts_url
-      p = {
+      FbIrcBot::FbRestUrl.new(session_secret, url_base.merge(
         'limit' => '100',
-        'method' => 'stream.get',
-        'viewer_id' => user_id
-        }
-      p['start_time'] = last_update.to_i.to_s if last_update > Time.at(0)
-
-      FbIrcBot::FbRestUrl.new(session_secret, url_base.merge(p))
+        'method' => 'stream.get',       
+        'viewer_id' => user_id,
+        'start_time' => last_update.to_i.to_s))
     end
 
     def comments_url(post_id)
