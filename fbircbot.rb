@@ -154,10 +154,8 @@ module FbIrcBot
 
     def posts_url
       FbIrcBot::FbRestUrl.new(session_secret, url_base.merge(
-        'limit' => '100',
         'method' => 'stream.get',       
-        'viewer_id' => user_id,
-        'start_time' => last_update.to_i.to_s))
+        'viewer_id' => user_id))
     end
 
     def comments_url(post_id)
@@ -343,6 +341,7 @@ class FbIrcPlugin < Plugin
         flatten])
 
       stream['posts'].collect { |p| FbIrcBot::Post.new(p) }.
+        select { |p| p.updated >= u.last_update }.
         reject { |p| u.ignoring?(profiles[p.who][:name]) }.
         each do |post|
         app = post.app ? " (#{post.app})" : ''
