@@ -90,6 +90,7 @@ module FbIrcBot
       2915120374 => 'Mobile Web',
       6628568379 => 'Facebook for iPhone',
       10732101402 => 'Ping.fm',
+      86734274142 => 'Foursquare',
       1394457661837 => 'Facebook Text Message',
     }
 
