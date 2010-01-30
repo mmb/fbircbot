@@ -236,7 +236,7 @@ end
 
 class FbIrcPlugin < Plugin
 
-  MaxCommentsShown = 20
+  MaxCommentsShown = 50
 
   def initialize
     super
