@@ -90,6 +90,7 @@ module FbIrcBot
       2915120374 => 'Mobile Web',
       4620273157 => 'Palm',
       6628568379 => 'iPhone',
+      8324839461 = 'Loopt',
       10732101402 => 'Ping.fm',
       86734274142 => 'Foursquare',
       1394457661837 => 'Facebook Text Message',
