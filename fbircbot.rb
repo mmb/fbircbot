@@ -31,6 +31,7 @@
 # manually updated with "@facebook update".
 
 require 'rubygems'
+require 'hpricot'
 require 'json'
 
 require 'cgi'
@@ -82,24 +83,10 @@ module FbIrcBot
       @updated = Time.at(d['updated_time'])
     end
 
-    # to look up app id http://www.facebook.com/apps/application.php?id=
-    APPS = {
-      2254487659 => 'BlackBerry',
-      2305272732 => 'Photos',
-      2309869772 => 'Links',
-      2915120374 => 'Mobile Web',
-      4620273157 => 'Palm',
-      6628568379 => 'iPhone',
-      8324839461 => 'Loopt',
-      10732101402 => 'Ping.fm',
-      86734274142 => 'Foursquare',
-      1394457661837 => 'Facebook Text Message',
-    }
-
     def all_comments_loaded?; comment_count == comments.size; end
 
-    def app
-      APPS.fetch(app_id) { |a| "app #{a}" if a }
+    def app(map={})
+      map.fetch(app_id, {})[:name] || ("app #{app_id}" if app_id)
     end
 
     def load_comments_from_parsed_json(d, options={})
@@ -243,6 +230,7 @@ class FbIrcPlugin < Plugin
     super
     @users = {}
     (@registry[:users] ||= {}).each { |k,v| @users[k] = FbIrcBot::User.new(v) }
+    @apps = @registry[:apps] || {}
     @profiles = {}
   end
 
@@ -286,6 +274,7 @@ class FbIrcPlugin < Plugin
     dumped = {}
     @users.each { |k,v| dumped[k] = v.dump  }
     @registry[:users] = dumped
+    @registry[:apps] = @apps
   end
 
   def poll_start
@@ -348,7 +337,11 @@ class FbIrcPlugin < Plugin
         select { |p| p.updated >= u.last_update }.
         reject { |p| u.ignoring?(profiles[p.who][:name]) }.
         each do |post|
-        app = post.app ? " (#{post.app})" : ''
+        if post.app_id and !@apps.key?(post.app_id)
+          lookup_app_name(post.app_id)
+        end
+        app_name = post.app(@apps)
+        app = app_name ? " (#{app_name})" : ''
         m.reply("#{u.nick} Facebook: #{profiles[post.who][:name]} (#{post.when_s})#{app}: #{post.what}")
         unless post.all_comments_loaded?
           post.load_comments_from_parsed_json(JSON.parse(@bot.httputil.get(
@@ -390,6 +383,17 @@ class FbIrcPlugin < Plugin
       u.last_update = last_update
     end
     true
+  end
+
+  def app_url(app_id)
+    "http://www.facebook.com/apps/application.php?id=#{app_id}"
+  end
+
+  def lookup_app_name(app_id)
+    page = @bot.httputil.get(app_url(app_id))
+    doc = Hpricot(page)
+    name = (doc/"title").text.sub(/ \| Facebook$/, '')
+    @apps[app_id] = @apps.fetch(app_id, {}).merge(:name => name)
   end
 
   def cleanup
