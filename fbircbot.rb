@@ -396,6 +396,11 @@ class FbIrcPlugin < Plugin
     @apps[app_id] = @apps.fetch(app_id, {}).merge(:name => name)
   end
 
+  def app_list(m, params)
+    m.reply("#{@apps.size} Facebook applications")
+    @apps.sort.each { |id,a| m.reply("#{id.to_s.ljust(12)} #{a[:name]}") }
+  end
+
   def cleanup
     poll_stop
     super
@@ -421,3 +426,5 @@ plugin.map('facebook ignore delete :nick *friend', :action => 'ignore_delete')
 plugin.map('facebook ignore list :nick', :action => 'ignore_list')
 
 plugin.map('facebook url :nick', :action => 'url')
+
+plugin.map('facebook debug app list', :action => 'app_list')
