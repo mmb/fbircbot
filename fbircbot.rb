@@ -31,7 +31,6 @@
 # manually updated with "@facebook update".
 
 require 'rubygems'
-require 'hpricot'
 require 'json'
 
 require 'cgi'
@@ -60,6 +59,8 @@ module FbIrcBot
         gsub('&nbsp;', ' '))
     end
 
+    module_function :strip_html
+
     attr_reader :who
     attr_reader :whenn
     attr_reader :what
@@ -69,9 +70,9 @@ module FbIrcBot
     include Said
 
     def initialize(d)
-      @app_id, @comment_count, @permalink, @post_id, @who, @whenn =
-        d['app_id'], d['comments']['count'].to_i, d['permalink'], d['post_id'],
-        d['actor_id'], Time.at(d['created_time'])
+      @attribution, @comment_count, @permalink, @post_id, @who, @whenn =
+        d['attribution'], d['comments']['count'].to_i, d['permalink'],
+        d['post_id'], d['actor_id'], Time.at(d['created_time'])
       attachment = d.fetch('attachment', {})
 
       description = strip_html(attachment['description']) if attachment['description']
@@ -85,16 +86,12 @@ module FbIrcBot
 
     def all_comments_loaded?; comment_count == comments.size; end
 
-    def app(map={})
-      map.fetch(app_id, {})[:name] || ("app #{app_id}" if app_id)
-    end
-
     def load_comments_from_parsed_json(d, options={})
       @comments = d.to_a.collect { |c| Comment.new(c) }
       @comment_count = comments.size if options[:is_all]
     end
 
-    attr_reader :app_id
+    attr_reader :attribution
     attr_reader :comment_count
     attr_reader :comments
     attr_reader :permalink
@@ -230,7 +227,6 @@ class FbIrcPlugin < Plugin
     super
     @users = {}
     (@registry[:users] ||= {}).each { |k,v| @users[k] = FbIrcBot::User.new(v) }
-    @apps = @registry[:apps] || {}
     @profiles = {}
   end
 
@@ -274,7 +270,6 @@ class FbIrcPlugin < Plugin
     dumped = {}
     @users.each { |k,v| dumped[k] = v.dump  }
     @registry[:users] = dumped
-    @registry[:apps] = @apps
   end
 
   def poll_start
@@ -337,12 +332,14 @@ class FbIrcPlugin < Plugin
         select { |p| p.updated >= u.last_update }.
         reject { |p| u.ignoring?(profiles[p.who][:name]) }.
         each do |post|
-        if post.app_id and !@apps.key?(post.app_id)
-          lookup_app_name(post.app_id)
+        if post.attribution
+          attribution = FbIrcBot::Said::strip_html(post.attribution)
+          attribution = " (#{attribution})" unless attribution.empty?
+        else
+          attribution = ''
         end
-        app_name = post.app(@apps)
-        app = app_name ? " (#{app_name})" : ''
-        m.reply("#{u.nick} Facebook: #{profiles[post.who][:name]} (#{post.when_s})#{app}: #{post.what}")
+
+        m.reply("#{u.nick} Facebook: #{profiles[post.who][:name]} (#{post.when_s})#{attribution}: #{post.what}")
         unless post.all_comments_loaded?
           post.load_comments_from_parsed_json(JSON.parse(@bot.httputil.get(
             u.comments_url(post.post_id), :cache => false)), :is_all => true)
@@ -385,22 +382,6 @@ class FbIrcPlugin < Plugin
     true
   end
 
-  def app_url(app_id)
-    "http://www.facebook.com/apps/application.php?id=#{app_id}"
-  end
-
-  def lookup_app_name(app_id)
-    page = @bot.httputil.get(app_url(app_id))
-    doc = Hpricot(page)
-    name = (doc/"title").text.sub(/ \| Facebook$/, '')
-    @apps[app_id] = @apps.fetch(app_id, {}).merge(:name => name)
-  end
-
-  def app_list(m, params)
-    m.reply("#{@apps.size} Facebook applications")
-    @apps.sort.each { |id,a| m.reply("#{id.to_s.ljust(12)} #{a[:name]}") }
-  end
-
   def cleanup
     poll_stop
     super
@@ -426,5 +407,3 @@ plugin.map('facebook ignore delete :nick *friend', :action => 'ignore_delete')
 plugin.map('facebook ignore list :nick', :action => 'ignore_list')
 
 plugin.map('facebook url :nick', :action => 'url')
-
-plugin.map('facebook debug app list', :action => 'app_list')
