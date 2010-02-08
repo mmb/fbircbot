@@ -78,6 +78,9 @@ module FbIrcBot
       description = strip_html(attachment['description']) if attachment['description']
 
       attachment_href = FbIrcBot.strip_fb_tracking(attachment['href'])
+      if attachment_href == 'http://www.facebook.com/'
+        attachment_href = ''
+      end
       @what = "#{d['message']} #{attachment['name']} #{description} #{attachment_href}".gsub(/\s+/, ' ').strip
 
       load_comments_from_parsed_json(d['comments']['comment_list'])
