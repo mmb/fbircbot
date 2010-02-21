@@ -135,7 +135,8 @@ module FbIrcBot
 
     def initialize(d)
       @api_key = d[:api_key]
-      @ignores = d[:ignores] || {}
+      @ignore_friends = d[:ignore_friends] || {}
+      @ignore_apps = d[:ignore_apps] || {}
       @last_update = d[:last_update] || Time.now - 86400
       @nick = d[:nick]
       @session_key = d[:session_key]
@@ -164,20 +165,31 @@ module FbIrcBot
         'fields' => fields.to_a.join(',')))
     end
 
-    def ignore(friend); @ignores[friend.strip] = true; end
+    def ignore_app(app); @ignore_apps[app.strip] = true; end
 
-    def unignore(friend); @ignores.delete(friend); end
+    def unignore_app(app); @ignore_apps.delete(app); end
 
-    def ignore_list; @ignores.keys.sort; end
+    def ignore_app_list; @ignore_apps.keys.sort; end
 
-    def ignoring?(friend)
-      @ignores.keys.collect { |f| f.downcase } .include?(friend.downcase)
+    def ignoring_app?(app)
+      app and !app.empty? and @ignore_apps.keys.collect { |f| f.downcase }.include?(app.downcase)
+    end
+
+    def ignore_friend(friend); @ignore_friends[friend.strip] = true; end
+
+    def unignore_friend(friend); @ignore_friends.delete(friend); end
+
+    def ignore_friend_list; @ignore_friends.keys.sort; end
+
+    def ignoring_friend?(friend)
+      @ignore_friends.keys.collect { |f| f.downcase }.include?(friend.downcase)
     end
 
     def dump
       {
         :api_key => api_key,
-        :ignores => @ignores,
+        :ignore_friends => @ignore_friends,
+        :ignore_apps => @ignore_apps,
         :last_update => last_update,
         :nick => nick,
         :session_key => session_key,
@@ -244,7 +256,7 @@ class FbIrcPlugin < Plugin
       when 'list' then
         'facebook list => list known Facebook users'
       when 'ignore' then
-        'facebook ignore (add nick friend|delete nick friend|list nick) => ignore updates from some friends for a Facebook user'
+        'facebook ignore (app|friend) (add nick (app_name|friend_name)|delete nick (app_name|friend_name)|list nick) => ignore updates from some apps or friends for a Facebook user'
       when 'url' then
         "facebook url nick => get a Facebook user's news stream url"
       else
@@ -300,23 +312,35 @@ class FbIrcPlugin < Plugin
 
   def ignore_add(m, params)
     if (user = get_user(m, params[:nick]))
-      friend = params[:friend].join(' ')
-      user.ignore(friend)
-      m.reply("Ignored #{friend} for Facebook user #{user.nick}")
+      what, name = params[:what].downcase, params[:name].join(' ')
+      case what
+        when 'app' then user.ignore_app(name)
+        when 'friend' then user.ignore_friend(name)
+      end
+      m.reply("Ignored #{what} #{name} for Facebook user #{user.nick}")
     end
   end
 
   def ignore_delete(m, params)
     if (user = get_user(m, params[:nick]))
-      friend = params[:friend].join(' ')
-      user.unignore(friend)
-      m.reply("Unignored #{friend} for Facebook user #{user.nick}")
+      what, name = params[:what].downcase, params[:name].join(' ')
+      case what
+        when 'app' then user.unignore_app(name)
+        when 'friend' then user.unignore_friend(name)
+      end
+      m.reply("Unignored #{what} #{name} for Facebook user #{user.nick}")
     end
   end
 
   def ignore_list(m, params)
     if (user = get_user(m, params[:nick]))
-      m.reply("#{user.nick} is ignoring: #{user.ignore_list.join(', ')}")
+      what = params[:what].downcase
+      list = case what
+        when 'app' then user.ignore_app_list
+        when 'friend' then user.ignore_friend_list
+        else []
+      end
+      m.reply("#{user.nick} is ignoring #{what}s: #{list.join(', ')}")
     end
   end
 
@@ -333,7 +357,7 @@ class FbIrcPlugin < Plugin
 
       stream['posts'].collect { |p| FbIrcBot::Post.new(p) }.
         select { |p| p.updated >= u.last_update }.
-        reject { |p| u.ignoring?(profiles[p.who][:name]) }.
+        reject { |p| u.ignoring_app?(p.attribution) or u.ignoring_friend?(profiles[p.who][:name]) }.
         each do |post|
         if post.attribution
           attribution = FbIrcBot::Said::strip_html(post.attribution)
@@ -405,8 +429,8 @@ plugin.map(
 plugin.map('facebook delete :nick', :action => 'delete')
 plugin.map('facebook list', :action => 'list')
 
-plugin.map('facebook ignore add :nick *friend', :action => 'ignore_add')
-plugin.map('facebook ignore delete :nick *friend', :action => 'ignore_delete')
-plugin.map('facebook ignore list :nick', :action => 'ignore_list')
+plugin.map('facebook ignore :what add :nick *name', :action => 'ignore_add')
+plugin.map('facebook ignore :what delete :nick *name', :action => 'ignore_delete')
+plugin.map('facebook ignore :what list :nick', :action => 'ignore_list')
 
 plugin.map('facebook url :nick', :action => 'url')
