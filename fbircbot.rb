@@ -75,15 +75,7 @@ module FbIrcBot
       @attribution, @comment_count, @permalink, @post_id, @who, @whenn =
         d['attribution'], d['comments']['count'].to_i, d['permalink'],
         d['post_id'], d['actor_id'], Time.at(d['created_time'])
-      attachment = d.fetch('attachment', {})
-
-      description = strip_html(attachment['description']) if attachment['description']
-
-      attachment_href = FbIrcBot.strip_fb_tracking(attachment['href'])
-      if attachment_href == 'http://www.facebook.com/'
-        attachment_href = ''
-      end
-      @what = "#{d['message']} #{attachment['name']} #{description} #{attachment_href}".gsub(/\s+/, ' ').strip
+      @what = "#{d['message']} #{Post.format_attachment(d['attachment'])}".gsub(/\s+/, ' ').strip
 
       load_comments_from_parsed_json(d['comments']['comment_list'])
       @updated = Time.at(d['updated_time'])
@@ -97,6 +89,24 @@ module FbIrcBot
     end
 
     def <=>(other); updated <=> other.updated; end
+
+    def self.format_attachment(attachment)
+      parts = []
+
+      if attachment
+        parts.push(attachment['name'], attachment['caption'],
+          attachment['description'])
+        attachment_href = FbIrcBot.strip_fb_tracking(attachment['href'])
+        parts << attachment_href if attachment_href != 'http://www.facebook.com/'
+        attachment.fetch('media', []).each do |media|
+          href = FbIrcBot.strip_fb_tracking(media['href'])
+          if href and href != attachment_href
+            parts.push(media['type'], media['alt'], href)
+          end
+        end
+      end
+      parts.join(' ')
+    end
 
     attr_reader :attribution
     attr_reader :comment_count
