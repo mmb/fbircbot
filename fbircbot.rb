@@ -69,6 +69,8 @@ module FbIrcBot
   class Post
     include Said
 
+    include Comparable
+
     def initialize(d)
       @attribution, @comment_count, @permalink, @post_id, @who, @whenn =
         d['attribution'], d['comments']['count'].to_i, d['permalink'],
@@ -93,6 +95,8 @@ module FbIrcBot
       @comments = d.to_a.collect { |c| Comment.new(c) }
       @comment_count = comments.size if options[:is_all]
     end
+
+    def <=>(other); updated <=> other.updated; end
 
     attr_reader :attribution
     attr_reader :comment_count
@@ -358,6 +362,7 @@ class FbIrcPlugin < Plugin
       stream['posts'].collect { |p| FbIrcBot::Post.new(p) }.
         select { |p| p.updated >= u.last_update }.
         reject { |p| u.ignoring_app?(p.attribution) or u.ignoring_friend?(profiles[p.who][:name]) }.
+        sort.
         each do |post|
         if post.attribution
           attribution = FbIrcBot::Said::strip_html(post.attribution)
