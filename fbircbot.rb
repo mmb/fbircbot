@@ -72,9 +72,9 @@ module FbIrcBot
     include Comparable
 
     def initialize(d)
-      @attribution, @comment_count, @permalink, @post_id, @who, @whenn =
+      @attribution, @comment_count, @permalink, @post_id, @who, @whenn, @target_id =
         d['attribution'], d['comments']['count'].to_i, d['permalink'],
-        d['post_id'], d['actor_id'], Time.at(d['created_time'])
+        d['post_id'], d['actor_id'], Time.at(d['created_time']), d['target_id']
       @what = "#{d['message']} #{Post.format_attachment(d['attachment'])}".gsub(/\s+/, ' ').strip
 
       load_comments_from_parsed_json(d['comments']['comment_list'])
@@ -114,6 +114,7 @@ module FbIrcBot
     attr_reader :permalink
     attr_reader :post_id
     attr_reader :updated
+    attr_reader :target_id
   end
 
   class Comment
@@ -381,7 +382,8 @@ class FbIrcPlugin < Plugin
           attribution = ''
         end
 
-        m.reply("#{u.nick} Facebook: #{profiles[post.who][:name]} (#{post.when_s})#{attribution}: #{post.what}")
+        target = " -> #{profiles[post.target_id][:name]}" if post.target_id
+        m.reply("#{u.nick} Facebook: #{profiles[post.who][:name]}#{target} (#{post.when_s})#{attribution}: #{post.what}")
         unless post.all_comments_loaded?
           post.load_comments_from_parsed_json(JSON.parse(@bot.httputil.get(
             u.comments_url(post.post_id), :cache => false)), :is_all => true)
