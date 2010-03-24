@@ -382,7 +382,11 @@ class FbIrcPlugin < Plugin
           attribution = ''
         end
 
-        target = " -> #{profiles[post.target_id][:name]}" if post.target_id
+        target = if post.target_id
+          target_name = profiles.fetch(post.target_id.to_i, {}).fetch(:name, post.target_id)
+          " -> #{target_name}"
+        end
+
         m.reply("#{u.nick} Facebook: #{profiles[post.who][:name]}#{target} (#{post.when_s})#{attribution}: #{post.what}")
         unless post.all_comments_loaded?
           post.load_comments_from_parsed_json(JSON.parse(@bot.httputil.get(
