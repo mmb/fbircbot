@@ -74,11 +74,12 @@ module FbIrcBot
     def initialize(d)
       @attribution, @comment_count, @permalink, @post_id, @who, @whenn, @target_id =
         d['attribution'], d['comments']['count'].to_i, d['permalink'],
-        d['post_id'], d['actor_id'], Time.at(d['created_time']), d['target_id']
+        d['post_id'], d['actor_id'], Time.at(d['created_time'].to_i),
+        d['target_id']
       @what = "#{d['message']} #{Post.format_attachment(d['attachment'])}".gsub(/\s+/, ' ').strip
 
       load_comments_from_parsed_json(d['comments']['comment_list'])
-      @updated = Time.at(d['updated_time'])
+      @updated = Time.at(d['updated_time'].to_i)
     end
 
     def all_comments_loaded?; comment_count == comments.size; end
@@ -372,9 +373,11 @@ class FbIrcPlugin < Plugin
 
       stream['posts'].collect { |p| FbIrcBot::Post.new(p) }.
         select { |p| p.updated >= u.last_update }.
-        reject { |p| u.ignoring_app?(p.attribution) or u.ignoring_friend?(profiles[p.who][:name]) }.
+        reject { |p| u.ignoring_app?(p.attribution) }.
         sort.
         each do |post|
+        poster_name = profiles.fetch(post.who, {})[:name] || post.who
+        next if u.ignoring_friend?(poster_name)
         if post.attribution
           attribution = FbIrcBot::Said::strip_html(post.attribution)
           attribution = " (#{attribution})" unless attribution.empty?
@@ -387,7 +390,7 @@ class FbIrcPlugin < Plugin
           " -> #{target_name}"
         end
 
-        m.reply("#{u.nick} Facebook: #{profiles[post.who][:name]}#{target} (#{post.when_s})#{attribution}: #{post.what}")
+        m.reply("#{u.nick} Facebook: #{poster_name}#{target} (#{post.when_s})#{attribution}: #{post.what}")
         unless post.all_comments_loaded?
           post.load_comments_from_parsed_json(JSON.parse(@bot.httputil.get(
             u.comments_url(post.post_id), :cache => false)), :is_all => true)
