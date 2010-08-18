@@ -74,8 +74,9 @@ module FbIrcBot
     def initialize(d)
       @attribution, @comment_count, @permalink, @post_id, @who, @whenn, @target_id =
         d['attribution'], d['comments']['count'].to_i, d['permalink'],
-        d['post_id'], d['actor_id'], Time.at(d['created_time'].to_i),
-        d['target_id']
+        d['post_id'], d['actor_id'] ? d['actor_id'].to_i : d['actor_id'],
+        Time.at(d['created_time'].to_i),
+        d['target_id'] ? d['target_id'].to_i : d['target_id']
       @what = "#{d['message']} #{Post.format_attachment(d['attachment'])}".gsub(/\s+/, ' ').strip
 
       load_comments_from_parsed_json(d['comments']['comment_list'])
@@ -122,7 +123,8 @@ module FbIrcBot
     include Said
 
     def initialize(d)
-      @who, @whenn, @what = d['fromid'], Time.at(d['time']), d['text']
+      @who, @whenn, @what = d['fromid'] ? d['fromid'].to_i : d['fromid'],
+        Time.at(d['time']), d['text']
     end
   end
 
@@ -368,7 +370,8 @@ class FbIrcPlugin < Plugin
       stream = JSON.parse(data)
 
       profiles.merge!(Hash[*stream['profiles'].
-        collect { |x| [x['id'], { :name => x['name'], :type => x['type'] }] }.
+        collect { |x| [x['id'].to_i,
+          { :name => x['name'], :type => x['type'] }] }.
         flatten])
 
       stream['posts'].collect { |p| FbIrcBot::Post.new(p) }.
@@ -386,7 +389,8 @@ class FbIrcPlugin < Plugin
         end
 
         target = if post.target_id
-          target_name = profiles.fetch(post.target_id.to_i, {}).fetch(:name, post.target_id)
+          target_name = profiles.fetch(post.target_id, {}).fetch(
+            :name, post.target_id)
           " -> #{target_name}"
         end
 
@@ -416,8 +420,8 @@ class FbIrcPlugin < Plugin
             profile_resp = JSON.parse(@bot.httputil.get(u.profiles_url(
               profiles_needed), :cache => false))
             profiles.merge!(Hash[*profile_resp.
-              collect { |x| [x['uid'], { :name => x['name'],
-              :type => profiles.fetch(x['uid'], {})[:type] }] }.flatten])
+              collect { |x| [x['uid'].to_i, { :name => x['name'],
+              :type => profiles.fetch(x['uid'].to_i, {})[:type] }] }.flatten])
           rescue Exception
           end
         end
