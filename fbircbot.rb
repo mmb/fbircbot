@@ -381,7 +381,7 @@ class FbIrcPlugin < Plugin
         each do |post|
         poster_name = profiles.fetch(post.who, {})[:name] || post.who
         next if u.ignoring_friend?(poster_name)
-        if post.attribution
+        if post.attribution.is_a?(String)
           attribution = FbIrcBot::Said::strip_html(post.attribution)
           attribution = " (#{attribution})" unless attribution.empty?
         else
