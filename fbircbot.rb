@@ -388,7 +388,7 @@ class FbIrcPlugin < Plugin
           attribution = ''
         end
 
-        target = if post.target_id
+        target = if post.target_id and post.target_id != 1
           target_name = profiles.fetch(post.target_id, {}).fetch(
             :name, post.target_id)
           " -> #{target_name}"
